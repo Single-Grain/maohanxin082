@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>杭州小众风物之旅</title>
+    <style>
+        html, body {
+            padding: 0;
+            margin: 0;
+            height: 100%;
+            width: 100%;
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        header {
+            background-color: #99d9f1;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .main-content {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .map-container {
+            flex: 3;
+            position: relative;
+        }
+
+        .widgets-panel {
+            flex: 1;
+            padding: 15px;
+            background-color: #bbe8f4;
+            overflow-y: auto;
+            min-width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .widget-section {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .widget-section > div {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 150px;
+        }
+
+        h1, h3 {
+            color: #2c3e50;
+            margin: 0 0 10px 0;
+        }
+
+        #viewDiv {
+            height: 100%;
+            width: 100%;
+        }
+
+        .esri-legend {
+            width: 220px;
+            max-height: 300px;
+            background: rgba(255, 255, 255, 0.9) !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            border-radius: 8px;
+            padding: 10px;
+        }
+    </style>
+
+    <link rel="stylesheet" href="https://js.arcgis.com/4.32/esri/themes/light/main.css">
+    <script src="https://js.arcgis.com/4.32/"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>杭州小众风物之旅</h1>
+        </header>
+        
+        <div class="main-content">
+            <div class="map-container">
+                <div id="viewDiv"></div>
+            </div>
+            
+            <div class="widgets-panel">
+                <div class="widget-section">
+                    <h3>图层控制</h3>
+                    <div id="layerlist-container"></div>
+                </div>
+                <div class="widget-section">
+                    <h3>底图切换</h3>
+                    <div id="basemap-container"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        require([
+            "esri/Map",
+            "esri/views/MapView",
+            "esri/layers/FeatureLayer",
+            "esri/widgets/Search",
+            "esri/widgets/ScaleBar",
+            "esri/widgets/LayerList",
+            "esri/widgets/Legend",
+            "esri/widgets/BasemapGallery",
+            "esri/core/reactiveUtils"
+        ], (
+            Map, MapView, FeatureLayer, Search, ScaleBar, 
+            LayerList, Legend, BasemapGallery, reactiveUtils
+        ) => {
+            const map = new Map({
+                basemap: "streets-vector"
+            });
+
+            const view = new MapView({
+                container: "viewDiv",
+                map: map,
+                center: [120.1435, 30.2359],
+                zoom: 12,
+                constraints: {
+                    minZoom: 10,
+                    maxZoom: 18
+                }
+            });
+
+            const layers = [
+                new FeatureLayer({
+                    url: "https://www.geosceneonline.cn/server/rest/services/Hosted/杭州小众风物之旅/FeatureServer/0",
+                    title: "特色景点",
+                    popupTemplate: {
+                        title: "{名称}",
+                        content: "类型：{类型}<br>介绍：{介绍}"
+                    }
+                }),
+                new FeatureLayer({
+                    url: "https://www.geosceneonline.cn/server/rest/services/Hosted/杭州小众风物之旅/FeatureServer/1",
+                    title: "游览路线",
+                    renderer: {
+                        type: "simple",
+                        symbol: {
+                            type: "simple-line",
+                            color: "#FF6B6B",
+                            width: "4px"
+                        }
+                    }
+                }),
+                new FeatureLayer({
+                    url: "https://www.geosceneonline.cn/server/rest/services/Hosted/杭州小众风物之旅/FeatureServer/2",
+                    title: "公园区域",
+                    renderer: {
+                        type: "simple",
+                        symbol: {
+                            type: "simple-fill",
+                            color: "rgba(152, 251, 152, 0.3)",
+                            outline: {
+                                color: "#98FB98",
+                                width: "2px"
+                            }
+                        }
+                    }
+                })
+            ];
+            map.addMany(layers);
+
+            view.when().then(() => {
+                // 搜索控件
+                const search = new Search({
+                    view: view,
+                    sources: [{
+                        layer: layers[0],
+                        searchFields: ["名称"],
+                        displayField: "名称",
+                        outFields: ["*"],
+                        placeholder: "搜索景点"
+                    }]
+                });
+                view.ui.add(search, "top-right");
+
+                // 比例尺
+                view.ui.add(new ScaleBar({
+                    view: view,
+                    unit: "metric"
+                }), "bottom-left");
+
+                // 图层列表
+                const layerList = new LayerList({
+                    view: view,
+                    container: document.getElementById("layerlist-container"),
+                    listItemCreatedFunction: (event) => {
+                        const item = event.item;
+                        if (item.layer.type !== "base") {
+                            item.panel = {
+                                content: "legend",
+                                open: true
+                            };
+                        }
+                    }
+                });
+
+                // 图例（移动到地图右下角）
+                const legend = new Legend({
+                    view: view,
+                    style: "card"
+                });
+                view.ui.add(legend, {
+                    position: "bottom-right",
+                    index: 1
+                });
+
+                // 底图库
+                const basemapGallery = new BasemapGallery({
+                    view: view,
+                    container: document.getElementById("basemap-container"),
+                    source: {
+                        portal: {
+                            url: "https://www.arcgis.com",
+                            useVectorBasemaps: true
+                        }
+                    }
+                });
+
+                // 调整UI布局
+                reactiveUtils.once(() => view.ready).then(() => {
+                    view.ui.move("zoom", "bottom-right");
+                });
+            }).catch((error) => {
+                console.error("初始化错误:", error);
+                alert("地图加载失败，请检查控制台日志");
+            });
+        });
+    </script>
+</body>
+</html>
